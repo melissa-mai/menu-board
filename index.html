@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en"><head>
+<html lang="en">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>High Tea</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&amp;family=Annie+Use+Your+Telescope&amp;family=Sancreek&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Annie+Use+Your+Telescope&family=Sancreek&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -217,19 +218,21 @@
 
   #adminToggle{
     position:fixed;
-    right:18px; bottom:18px;
-    width:44px; height:44px;
+    right:14px; bottom:14px;
+    width:26px; height:26px;
     border-radius:50%;
     border:none;
-    background:#2c2c2c;
-    color:#eee;
-    font-size:1.2rem;
+    background:rgba(255,255,255,0.06);
+    color:rgba(243,234,210,0.28);
+    font-size:0.85rem;
     cursor:pointer;
-    box-shadow:0 4px 14px rgba(0,0,0,0.4);
+    box-shadow:none;
     font-family:system-ui,sans-serif;
     z-index:50;
+    transition:opacity 0.2s, background 0.2s, color 0.2s;
+    opacity:0.55;
   }
-  #adminToggle:hover{ background:#3a3a3a; }
+  #adminToggle:hover{ background:rgba(255,255,255,0.12); color:rgba(243,234,210,0.8); opacity:1; }
 
   /* ---------- ADMIN DRAWER ---------- */
 
@@ -347,27 +350,25 @@
 <body>
 
   <div class="sign-hook">
-    <svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg"><path d="M5,26 A20,20 0 0 1 45,26" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"></path></svg>
+    <svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg"><path d="M5,26 A20,20 0 0 1 45,26" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"/></svg>
   </div>
   <div class="frame">
-    <div class="corner-leaf left"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg></div>
-    <div class="corner-leaf right"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg></div>
+    <div class="corner-leaf left"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"/><path d="M20,8 L20,32"/></svg></div>
+    <div class="corner-leaf right"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"/><path d="M20,8 L20,32"/></svg></div>
     <div class="board">
       <div class="content" id="boardContent"><!-- rendered by JS --></div>
     </div>
     <div class="tray"></div>
   </div>
 
-  <button id="adminToggle" title="Admin">⚙</button>
-  <div style="text-align:center; padding:14px 0 30px;">
-    <a href="#" id="adminTextLink" style="font-family:system-ui,sans-serif; font-size:0.8rem; color:#9a9a9a; text-decoration:underline;">Admin</a>
-  </div>
+  <button id="adminToggle" title="Admin">&#9881;</button>
+  <a href="#" id="adminTextLink" style="display:none;"></a>
 
   <div id="adminDrawer">
     <div class="drawer-inner">
       <div class="drawer-header">
         <h2>Menu Admin</h2>
-        <button id="closeDrawer" aria-label="Close">×</button>
+        <button id="closeDrawer" aria-label="Close">&times;</button>
       </div>
 
       <div class="drawer-section">
@@ -375,7 +376,7 @@
         <p class="hint" id="connectionStatus">Not connected — edits only save in this browser until you connect a database.</p>
         <div class="field">
           <label for="fbConfig">Firebase config</label>
-          <textarea id="fbConfig" placeholder="Paste the config object from your Firebase project, e.g. { &quot;apiKey&quot;: &quot;...&quot;, &quot;databaseURL&quot;: &quot;https://your-project-default-rtdb.firebaseio.com&quot;, &quot;projectId&quot;: &quot;...&quot; }"></textarea>
+          <textarea id="fbConfig" placeholder='Paste the config object from your Firebase project, e.g. { "apiKey": "...", "databaseURL": "https://your-project-default-rtdb.firebaseio.com", "projectId": "..." }'></textarea>
         </div>
         <button type="button" class="btn-secondary" id="connectFirebase">Connect</button>
         <p class="hint">You can paste the whole code snippet Firebase shows you (imports and all) — it'll find the config automatically. First time setting this up? See FIREBASE_SETUP.md in this folder for step-by-step instructions on creating a free database and hosting this page. Once you connect here, click "Save Changes to File" below and redeploy that file — every copy will then sync live, automatically, with no further setup.</p>
@@ -410,7 +411,7 @@
         <form id="itemForm">
           <div class="field">
             <label for="fName">Dish name *</label>
-            <input id="fName" type="text" required="">
+            <input id="fName" type="text" required>
           </div>
           <div class="field">
             <label for="fIcon">Chalk doodle</label>
@@ -491,16 +492,7 @@
   // config into the "Connection Settings" panel in Admin and save. Once baked
   // in via "Save Changes to File", every copy of this file auto-connects to
   // the same database, so edits show up live on every device that has it open.
-  var FIREBASE_CONFIG = /*FIREBASE_CONFIG_START*/{
-  "apiKey": "AIzaSyBrMMRjXDTsR0-75pJ_FTFUg3KDr5Rb2yg",
-  "authDomain": "menu-board-46cd1.firebaseapp.com",
-  "databaseURL": "https://menu-board-46cd1-default-rtdb.europe-west1.firebasedatabase.app",
-  "projectId": "menu-board-46cd1",
-  "storageBucket": "menu-board-46cd1.firebasestorage.app",
-  "messagingSenderId": "31725575370",
-  "appId": "1:31725575370:web:1e708cc3f0197a12896833",
-  "measurementId": "G-34KY1RN08F"
-}/*FIREBASE_CONFIG_END*/;
+  var FIREBASE_CONFIG = /*FIREBASE_CONFIG_START*/null/*FIREBASE_CONFIG_END*/;
 
   var dbRef = null;
   var isLiveConnected = false;
@@ -509,32 +501,32 @@
   var STORAGE_KEY = "bistroChalkMenuData";
 
   var defaultData = /*DEFAULT_DATA_START*/{
-  "items": [
-    {
-      "description": "A truly great chicken salad is the perfect harmony of tender, savory chicken and crisp, cool crunch, all bound in a creamy dressing that makes every bite feel like a comforting yet refreshing upgrade to your day.",
-      "icon": "salad",
-      "id": "demo-1",
-      "name": "Chicken Salad",
-      "nutrition": {
-        "allergens": "",
-        "calories": "215",
-        "carbs": "2.3",
-        "fat": "9.3",
-        "fiber": "0.3",
-        "protein": "28",
-        "servingSize": "1",
-        "sodium": "400",
-        "sugar": "1",
-        "totalServings": "6"
+    meta: {
+      bistroName: "High Tea",
+      footerNote: "ask the cook about allergens",
+      lastUpdated: new Date().toISOString()
+    },
+    items: [
+      {
+        id: "demo-1",
+        name: "Coq au Vin",
+        icon: "chicken",
+        description: "Slow-braised chicken in red wine, with pearl onions, mushrooms & smoky lardons",
+        nutrition: {
+          servingSize: "1 plate",
+          totalServings: "4",
+          calories: "540",
+          protein: "38",
+          carbs: "12",
+          fiber: "2",
+          sugar: "4",
+          fat: "34",
+          sodium: "680",
+          allergens: "Contains dairy. May contain trace gluten from braising liquid."
+        }
       }
-    }
-  ],
-  "meta": {
-    "bistroName": "High Tea",
-    "footerNote": "ask the cook about allergens",
-    "lastUpdated": "2026-06-18T12:13:46.145Z"
-  }
-}/*DEFAULT_DATA_END*/;
+    ]
+  }/*DEFAULT_DATA_END*/;
 
   var data = load();
   var editingId = null;
@@ -1115,4 +1107,6 @@
   renderBoard();
   if(FIREBASE_CONFIG){ connectFirebase(FIREBASE_CONFIG); }
 })();
-</script></body></html>
+</script>
+</body>
+</html>
