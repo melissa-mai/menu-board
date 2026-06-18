@@ -5,6 +5,8 @@
 <title>High Tea</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&amp;family=Annie+Use+Your+Telescope&amp;family=Sancreek&amp;display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root{
     --board-bg:#26331f;
@@ -357,6 +359,9 @@
   </div>
 
   <button id="adminToggle" title="Admin">⚙</button>
+  <div style="text-align:center; padding:14px 0 30px;">
+    <a href="#" id="adminTextLink" style="font-family:system-ui,sans-serif; font-size:0.8rem; color:#9a9a9a; text-decoration:underline;">Admin</a>
+  </div>
 
   <div id="adminDrawer">
     <div class="drawer-inner">
@@ -366,9 +371,20 @@
       </div>
 
       <div class="drawer-section">
+        <h3>Connection Settings</h3>
+        <p class="hint" id="connectionStatus">Not connected — edits only save in this browser until you connect a database.</p>
+        <div class="field">
+          <label for="fbConfig">Firebase config</label>
+          <textarea id="fbConfig" placeholder="Paste the config object from your Firebase project, e.g. { &quot;apiKey&quot;: &quot;...&quot;, &quot;databaseURL&quot;: &quot;https://your-project-default-rtdb.firebaseio.com&quot;, &quot;projectId&quot;: &quot;...&quot; }"></textarea>
+        </div>
+        <button type="button" class="btn-secondary" id="connectFirebase">Connect</button>
+        <p class="hint">You can paste the whole code snippet Firebase shows you (imports and all) — it'll find the config automatically. First time setting this up? See FIREBASE_SETUP.md in this folder for step-by-step instructions on creating a free database and hosting this page. Once you connect here, click "Save Changes to File" below and redeploy that file — every copy will then sync live, automatically, with no further setup.</p>
+      </div>
+
+      <div class="drawer-section">
         <h3>Save &amp; Share</h3>
         <button type="button" class="btn-primary" id="saveToFile">Save Changes to File</button>
-        <p class="hint">Your edits autosave in this browser only, so other browsers/devices still show the old menu until you do this. This downloads an updated index.html with your current menu built in — replace your old file with it (e.g. in Downloads, drag/move it over the original) so everyone opening the file sees the same thing.</p>
+        <p class="hint" id="saveToFileHint">Downloads an updated index.html with your current menu (and connection settings) built in. Use this once to deploy your database connection, or any time you want an offline backup. While connected to a database, day-to-day menu edits already sync live — you don't need this for those.</p>
       </div>
 
       <div class="drawer-section">
@@ -471,34 +487,53 @@
   // menu data into a fresh copy of this file, so it works the same in any browser.
   var ORIGINAL_DOCUMENT_HTML = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
 
+  // Firebase Realtime Database config. Empty until you paste your project's
+  // config into the "Connection Settings" panel in Admin and save. Once baked
+  // in via "Save Changes to File", every copy of this file auto-connects to
+  // the same database, so edits show up live on every device that has it open.
+  var FIREBASE_CONFIG = /*FIREBASE_CONFIG_START*/{
+  "apiKey": "AIzaSyBrMMRjXDTsR0-75pJ_FTFUg3KDr5Rb2yg",
+  "authDomain": "menu-board-46cd1.firebaseapp.com",
+  "databaseURL": "https://menu-board-46cd1-default-rtdb.europe-west1.firebasedatabase.app",
+  "projectId": "menu-board-46cd1",
+  "storageBucket": "menu-board-46cd1.firebasestorage.app",
+  "messagingSenderId": "31725575370",
+  "appId": "1:31725575370:web:1e708cc3f0197a12896833",
+  "measurementId": "G-34KY1RN08F"
+}/*FIREBASE_CONFIG_END*/;
+
+  var dbRef = null;
+  var isLiveConnected = false;
+  var remotePushTimer = null;
+
   var STORAGE_KEY = "bistroChalkMenuData";
 
   var defaultData = /*DEFAULT_DATA_START*/{
+  "items": [
+    {
+      "description": "A truly great chicken salad is the perfect harmony of tender, savory chicken and crisp, cool crunch, all bound in a creamy dressing that makes every bite feel like a comforting yet refreshing upgrade to your day.",
+      "icon": "salad",
+      "id": "demo-1",
+      "name": "Chicken Salad",
+      "nutrition": {
+        "allergens": "",
+        "calories": "215",
+        "carbs": "2.3",
+        "fat": "9.3",
+        "fiber": "0.3",
+        "protein": "28",
+        "servingSize": "1",
+        "sodium": "400",
+        "sugar": "1",
+        "totalServings": "6"
+      }
+    }
+  ],
   "meta": {
     "bistroName": "High Tea",
     "footerNote": "ask the cook about allergens",
-    "lastUpdated": "2026-06-18T10:52:31.324Z"
-  },
-  "items": [
-    {
-      "id": "demo-1",
-      "name": "Chicken Salad",
-      "icon": "salad",
-      "description": "A truly great chicken salad is the perfect harmony of tender, savory chicken and crisp, cool crunch, all bound in a creamy dressing that makes every bite feel like a comforting yet refreshing upgrade to your day.",
-      "nutrition": {
-        "servingSize": "1",
-        "totalServings": "6",
-        "calories": "215",
-        "protein": "28",
-        "carbs": "2.3",
-        "fiber": "0.3",
-        "sugar": "1",
-        "fat": "9.3",
-        "sodium": "400",
-        "allergens": ""
-      }
-    }
-  ]
+    "lastUpdated": "2026-06-18T12:13:46.145Z"
+  }
 }/*DEFAULT_DATA_END*/;
 
   var data = load();
@@ -515,6 +550,130 @@
   function save(){
     data.meta.lastUpdated = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    queueRemotePush(true);
+  }
+
+  function queueRemotePush(immediate){
+    if(!dbRef) return;
+    if(remotePushTimer){ clearTimeout(remotePushTimer); remotePushTimer = null; }
+    if(immediate){
+      dbRef.set(data);
+    } else {
+      remotePushTimer = setTimeout(function(){ dbRef.set(data); }, 500);
+    }
+  }
+
+  function updateConnectionStatus(connected, message){
+    var statusEl = document.getElementById("connectionStatus");
+    if(!statusEl) return;
+    if(connected){
+      statusEl.textContent = "Connected — live sync is on. Every device with this file open updates instantly.";
+    } else if(message){
+      statusEl.textContent = "Couldn't connect: " + message;
+    } else {
+      statusEl.textContent = "Not connected — edits only save in this browser until you connect a database.";
+    }
+  }
+
+  function parseFirebaseConfigInput(text){
+    text = (text || "").trim();
+    if(!text) return null;
+    // Handles pasting just the {...} object, or the whole snippet Firebase shows
+    // (imports, "const firebaseConfig = {...};", etc.) — find the object assigned
+    // to firebaseConfig/config specifically, so other braces in the snippet
+    // (like the import line) don't confuse it.
+    var assign = text.match(/(?:firebaseConfig|config)\s*=\s*(\{[\s\S]*?\})\s*;?/);
+    var candidate = assign ? assign[1] : null;
+    if(!candidate){
+      var match = text.match(/\{[\s\S]*\}/);
+      candidate = match ? match[0] : null;
+    }
+    if(!candidate) return null;
+    try{
+      var parsed = new Function("return (" + candidate + ");")();
+      return (parsed && typeof parsed === "object") ? parsed : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function maybeFillMetaFields(){
+    var active = document.activeElement;
+    if(active && (active.id === "metaName" || active.id === "metaFooter")) return;
+    fillMetaFields();
+  }
+
+  function attachRealtimeListener(){
+    dbRef.on("value", function(snapshot){
+      var val = snapshot.val();
+      if(!val) return;
+      data = val;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      renderBoard();
+      if(document.getElementById("adminDrawer").classList.contains("open")){
+        maybeFillMetaFields();
+        renderItemList();
+      }
+    });
+  }
+
+  function fillConnectionField(){
+    var ta = document.getElementById("fbConfig");
+    if(ta && FIREBASE_CONFIG) ta.value = JSON.stringify(FIREBASE_CONFIG, null, 2);
+    updateConnectionStatus(isLiveConnected);
+  }
+
+  function connectFirebase(config){
+    if(!config || !config.apiKey || !config.databaseURL){
+      updateConnectionStatus(false, "config needs at least an apiKey and databaseURL — paste the snippet from your Firebase project settings");
+      return;
+    }
+    var statusEl = document.getElementById("connectionStatus");
+    if(statusEl) statusEl.textContent = "Connecting…";
+    var settled = false;
+    var timeoutId = setTimeout(function(){
+      if(settled) return;
+      settled = true;
+      updateConnectionStatus(false, "timed out waiting for a response. Double-check the apiKey and databaseURL, and make sure this page is open via a real web link (not just double-clicked from a folder on your computer) — then try Connect again.");
+    }, 8000);
+    try{
+      if(!firebase.apps || !firebase.apps.length){
+        firebase.initializeApp(config);
+      }
+      dbRef = firebase.database().ref("menuBoard");
+      dbRef.once("value").then(function(snapshot){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        var val = snapshot.val();
+        if(val){
+          data = val;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } else {
+          dbRef.set(data);
+        }
+        isLiveConnected = true;
+        FIREBASE_CONFIG = config;
+        updateConnectionStatus(true);
+        attachRealtimeListener();
+        renderBoard();
+        fillMetaFields();
+        renderItemList();
+      }).catch(function(err){
+        if(settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        dbRef = null;
+        updateConnectionStatus(false, err.message);
+      });
+    }catch(err){
+      if(!settled){
+        settled = true;
+        clearTimeout(timeoutId);
+      }
+      dbRef = null;
+      updateConnectionStatus(false, err.message);
+    }
   }
 
   function formatDate(iso){
@@ -754,26 +913,43 @@
     document.getElementById("adminDrawer").classList.add("open");
     fillMetaFields();
     renderItemList();
+    fillConnectionField();
   }
   function closeDrawer(){
     document.getElementById("adminDrawer").classList.remove("open");
   }
 
   document.getElementById("adminToggle").addEventListener("click", openDrawer);
+  document.getElementById("adminTextLink").addEventListener("click", function(e){ e.preventDefault(); openDrawer(); });
   document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
 
+  // Fallback: visiting the page with ?admin or #admin in the address bar always
+  // opens the admin panel, regardless of whether any on-page button is visible.
+  if(/[?#]admin\b/i.test(location.href)){
+    openDrawer();
+  }
+
+  function replaceMarkerBlock(html, startTag, endTag, replacementValue){
+    var esc = function(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+    var re = new RegExp(esc(startTag) + "[\\s\\S]*?" + esc(endTag));
+    if(!re.test(html)) return null;
+    return html.replace(re, startTag + replacementValue + endTag);
+  }
+
   function exportUpdatedFile(){
-    var marker = /\/\*DEFAULT_DATA_START\*\/[\s\S]*?\/\*DEFAULT_DATA_END\*\//;
-    if(!marker.test(ORIGINAL_DOCUMENT_HTML)){
+    var exportData = JSON.parse(JSON.stringify(data));
+    exportData.meta.lastUpdated = new Date().toISOString();
+    var json = JSON.stringify(exportData, null, 2);
+
+    var updatedHtml = replaceMarkerBlock(ORIGINAL_DOCUMENT_HTML, "/*DEFAULT_DATA_START*/", "/*DEFAULT_DATA_END*/", json);
+    if(updatedHtml === null){
       alert("Couldn't find the menu data block in this page, so nothing was saved. Please report this issue.");
       return;
     }
 
-    var exportData = JSON.parse(JSON.stringify(data));
-    exportData.meta.lastUpdated = new Date().toISOString();
-    var json = JSON.stringify(exportData, null, 2);
-    var replacement = "/*DEFAULT_DATA_START*/" + json + "/*DEFAULT_DATA_END*/";
-    var updatedHtml = ORIGINAL_DOCUMENT_HTML.replace(marker, replacement);
+    var fbJson = FIREBASE_CONFIG ? JSON.stringify(FIREBASE_CONFIG, null, 2) : "null";
+    var updatedHtml2 = replaceMarkerBlock(updatedHtml, "/*FIREBASE_CONFIG_START*/", "/*FIREBASE_CONFIG_END*/", fbJson);
+    if(updatedHtml2 !== null) updatedHtml = updatedHtml2;
 
     var blob = new Blob([updatedHtml], {type:"text/html"});
     var url = URL.createObjectURL(blob);
@@ -785,7 +961,7 @@
     document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 
-    alert("Downloaded an updated index.html with your current menu built in.\n\nReplace your old file with this one so it shows the same menu in any browser or device.");
+    alert("Downloaded an updated index.html with your current menu" + (FIREBASE_CONFIG ? " and database connection" : "") + " built in.\n\nReplace your hosted file with this one so it shows the same menu in any browser or device.");
   }
 
   document.getElementById("saveToFile").addEventListener("click", exportUpdatedFile);
@@ -799,9 +975,20 @@
     document.getElementById(id).addEventListener("input", function(){
       data.meta.bistroName = document.getElementById("metaName").value;
       data.meta.footerNote = document.getElementById("metaFooter").value;
-      save();
+      data.meta.lastUpdated = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      queueRemotePush(false); // debounced, so we don't push on every keystroke
       renderBoard();
     });
+  });
+
+  document.getElementById("connectFirebase").addEventListener("click", function(){
+    var parsed = parseFirebaseConfigInput(document.getElementById("fbConfig").value);
+    if(!parsed){
+      updateConnectionStatus(false, "couldn't read that — paste the config object Firebase gives you in your project settings");
+      return;
+    }
+    connectFirebase(parsed);
   });
 
   function renderItemList(){
@@ -926,5 +1113,6 @@
   });
 
   renderBoard();
+  if(FIREBASE_CONFIG){ connectFirebase(FIREBASE_CONFIG); }
 })();
 </script></body></html>
