@@ -540,10 +540,21 @@
   var data = load();
   var editingId = null;
 
+  // Firebase's Realtime Database silently drops empty arrays/objects (e.g. an
+  // empty items list), so data coming back from localStorage or the database
+  // may be missing "items" or "meta" entirely. Always patch those back in so
+  // the rest of the app can assume they exist.
+  function normalizeData(d){
+    if(!d || typeof d !== "object") return JSON.parse(JSON.stringify(defaultData));
+    if(!d.items) d.items = [];
+    if(!d.meta) d.meta = {};
+    return d;
+  }
+
   function load(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
-      if(raw) return JSON.parse(raw);
+      if(raw) return normalizeData(JSON.parse(raw));
     }catch(e){}
     return JSON.parse(JSON.stringify(defaultData));
   }
@@ -608,7 +619,7 @@
     dbRef.on("value", function(snapshot){
       var val = snapshot.val();
       if(!val) return;
-      data = val;
+      data = normalizeData(val);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       renderBoard();
       if(document.getElementById("adminDrawer").classList.contains("open")){
@@ -648,7 +659,7 @@
         clearTimeout(timeoutId);
         var val = snapshot.val();
         if(val){
-          data = val;
+          data = normalizeData(val);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } else {
           dbRef.set(data);
@@ -752,6 +763,7 @@
   }
 
   function renderBoard(){
+    data = normalizeData(data);
     var root = document.getElementById("boardContent");
     root.innerHTML = "";
 
