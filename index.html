@@ -341,71 +341,44 @@
     border:1px solid #ccc; background:#f5f5f5; border-radius:5px; padding:6px 14px; cursor:pointer; font-size:0.85rem;
   }
 
-  /* ---------- HISTORY TOGGLE (mini hanging board) ---------- */
+  /* ---------- HISTORY TOGGLE (chalked into the corner of the board) ---------- */
 
   #historyToggle{
-    position:fixed;
+    position:absolute;
     left:16px; bottom:14px;
-    padding:0;
+    padding:0 0 0 10px;
     border:none;
     background:none;
     cursor:pointer;
-    z-index:50;
-    transform:rotate(-5deg);
-    transition:transform 0.2s ease;
-  }
-  #historyToggle:hover{ transform:rotate(-2deg) translateY(-3px); }
-
-  .mini-hook{
-    display:block;
-    width:14px; height:8px;
-    margin:0 auto -3px;
-    border:2px solid var(--frame-dark);
-    border-bottom:none;
-    border-radius:7px 7px 0 0;
-    position:relative;
-    z-index:1;
-  }
-
-  .mini-frame{
-    position:relative;
-    width:56px; height:50px;
-    padding:4px;
-    background:var(--frame);
-    border-radius:3px;
-    box-shadow:
-      0 0 0 1px var(--frame-dark),
-      0 6px 14px rgba(0,0,0,0.45);
-  }
-  .mini-frame::before{
-    /* wood grain, mirroring the big frame */
-    content:"";
-    position:absolute; inset:0;
-    background-image:repeating-linear-gradient(95deg, rgba(0,0,0,0.12) 0px, transparent 2px, transparent 7px);
-    border-radius:3px;
-    pointer-events:none;
-  }
-
-  .mini-board{
-    position:relative;
-    width:100%; height:100%;
-    border-radius:2px;
-    background:radial-gradient(ellipse at 30% 20%, var(--board-bg) 0%, var(--board-bg-2) 100%);
-    box-shadow:inset 0 0 10px rgba(0,0,0,0.6);
-    display:flex; align-items:center; justify-content:center;
-    padding:2px;
-  }
-
-  .mini-board-text{
+    z-index:2;
     font-family:'Kalam',cursive;
-    font-size:0.58rem;
-    line-height:1.25;
-    letter-spacing:0.2px;
-    color:rgba(243,234,210,0.8);
-    text-shadow:0 0 2px rgba(243,234,210,0.3);
-    transition:color 0.2s;
+    font-size:0.95rem;
+    letter-spacing:0.3px;
+    color:rgba(243,234,210,0.55);
+    text-shadow:0 0 2px rgba(243,234,210,0.25);
+    transition:color 0.2s, text-shadow 0.2s;
   }
-  #historyToggle:hover .mini-board-text{ color:#f3ead2; }
+  #historyToggle:hover{
+    color:rgba(243,234,210,0.95);
+    text-shadow:0 0 3px rgba(243,234,210,0.4), 0 0 8px rgba(217,164,65,0.2);
+  }
+
+  .leaf-cluster{
+    position:absolute;
+    top:-11px; left:-8px;
+    width:28px; height:20px;
+  }
+
+  .history-leaf{
+    position:absolute;
+    color:var(--leaf-green);
+    opacity:0.8;
+    transition:opacity 0.2s;
+  }
+  .history-leaf.lc1{ width:15px; height:15px; left:0; top:3px; transform:rotate(-25deg) scaleX(-1); }
+  .history-leaf.lc2{ width:12px; height:12px; left:9px; top:-3px; transform:rotate(15deg); opacity:0.7; }
+  .history-leaf.lc3{ width:10px; height:10px; left:15px; top:6px; transform:rotate(40deg); opacity:0.6; }
+  #historyToggle:hover .history-leaf{ opacity:1; }
 
   /* ---------- HISTORY DRAWER ---------- */
 
@@ -471,21 +444,20 @@
     <div class="corner-leaf right"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg></div>
     <div class="board">
       <div class="content" id="boardContent"><!-- rendered by JS --></div>
+      <button id="historyToggle" title="Previous Recipes" aria-label="Previous Recipes">
+        <span class="leaf-cluster">
+          <svg class="history-leaf lc1" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg>
+          <svg class="history-leaf lc2" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg>
+          <svg class="history-leaf lc3" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20,4 C32,8 34,20 20,36 C6,20 8,8 20,4 Z"></path><path d="M20,8 L20,32"></path></svg>
+        </span>
+        previous recipes
+      </button>
     </div>
     <div class="tray"></div>
   </div>
 
   <button id="adminToggle" title="Admin">⚙</button>
   <a href="#" id="adminTextLink" style="display:none;"></a>
-
-  <button id="historyToggle" title="Previous Recipes" aria-label="Previous Recipes">
-    <span class="mini-hook"></span>
-    <span class="mini-frame">
-      <span class="mini-board">
-        <span class="mini-board-text">previous<br>recipes</span>
-      </span>
-    </span>
-  </button>
 
   <div id="historyDrawer">
     <div class="drawer-inner">
