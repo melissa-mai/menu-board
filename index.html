@@ -341,6 +341,78 @@
     border:1px solid #ccc; background:#f5f5f5; border-radius:5px; padding:6px 14px; cursor:pointer; font-size:0.85rem;
   }
 
+  /* ---------- HISTORY TOGGLE ---------- */
+
+  #historyToggle{
+    position:fixed;
+    left:14px; bottom:12px;
+    padding:6px 12px;
+    border-radius:12px;
+    border:1px solid rgba(217,164,65,0.4);
+    background:rgba(0,0,0,0.2);
+    color:rgba(243,234,210,0.75);
+    font-size:0.8rem;
+    font-family:'Kalam',cursive;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
+    z-index:50;
+    transition:color 0.2s, background 0.2s, border-color 0.2s;
+  }
+  #historyToggle:hover{
+    color:#f3ead2;
+    background:rgba(0,0,0,0.35);
+    border-color:rgba(217,164,65,0.8);
+  }
+
+  /* ---------- HISTORY DRAWER ---------- */
+
+  #historyDrawer{
+    position:fixed; top:0; left:0; bottom:0;
+    width:380px; max-width:92vw;
+    background:#faf9f6;
+    box-shadow:8px 0 30px rgba(0,0,0,0.35);
+    transform:translateX(-100%);
+    transition:transform 0.25s ease;
+    z-index:100;
+    overflow-y:auto;
+    font-family:system-ui,-apple-system,sans-serif;
+    color:#2a2a2a;
+  }
+  #historyDrawer.open{ transform:translateX(0); }
+
+  .history-card{
+    border:1px solid #e2e2dd; border-radius:7px; padding:10px 12px; margin-bottom:10px; background:#fff;
+  }
+  .history-card .name{ font-weight:700; font-size:0.95rem; }
+  .history-card .meta{ font-size:0.78rem; color:#888; margin-top:2px; }
+  .history-card .desc{ font-size:0.85rem; color:#444; margin-top:6px; line-height:1.4; }
+  .history-card .row-actions{
+    display:flex; justify-content:flex-end; align-items:center; margin-top:8px; gap:8px;
+  }
+  .history-card button{
+    border:1px solid #d6d6cf; background:#fff; border-radius:5px; padding:5px 10px;
+    font-size:0.78rem; cursor:pointer; white-space:nowrap;
+  }
+  .history-card button:hover{ background:#f1f1ec; }
+  .history-card button:disabled{ opacity:0.55; cursor:default; }
+  .history-card .on-menu-tag{ font-size:0.78rem; color:#5a7a3a; font-weight:600; }
+
+  .request-card{
+    border:1px solid #e2e2dd; border-radius:7px; padding:10px 12px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:flex-start; gap:8px; background:#fffbea;
+  }
+  .request-card .info{ flex:1; }
+  .request-card .name{ font-weight:700; font-size:0.95rem; }
+  .request-card .meta{ font-size:0.8rem; color:#888; margin-top:2px; }
+  .request-card .actions{ display:flex; gap:6px; flex-shrink:0; }
+  .request-card button{
+    border:1px solid #d6d6cf; background:#fff; border-radius:5px; padding:4px 9px;
+    font-size:0.78rem; cursor:pointer;
+  }
+  .request-card button.primary{ background:#2c2c2c; color:#fff; border-color:#2c2c2c; }
+  .request-card button:hover{ opacity:0.85; }
+
   @media (max-width:480px){
     .bistro-name{ font-size:2.1rem; }
     .item-name{ font-size:1.6rem; }
@@ -363,6 +435,20 @@
 
   <button id="adminToggle" title="Admin">⚙</button>
   <a href="#" id="adminTextLink" style="display:none;"></a>
+
+  <button id="historyToggle" title="Previous Recipes">previous recipes</button>
+
+  <div id="historyDrawer">
+    <div class="drawer-inner">
+      <div class="drawer-header">
+        <h2>Previous Recipes</h2>
+        <button id="closeHistoryDrawer" aria-label="Close">×</button>
+      </div>
+      <p class="hint">Everything that's ever been posted to the board. Tap "Request Again" to ask for a dish to come back.</p>
+      <div id="historyList"></div>
+      <p class="hint" id="noHistoryHint" style="display:none;">Nothing posted yet.</p>
+    </div>
+  </div>
 
   <div id="adminDrawer">
     <div class="drawer-inner">
@@ -398,6 +484,12 @@
           <label for="metaFooter">Footer note (optional)</label>
           <input id="metaFooter" type="text">
         </div>
+      </div>
+
+      <div class="drawer-section">
+        <h3>Requests</h3>
+        <div id="requestList"></div>
+        <p class="hint" id="noRequestsHint" style="display:none;">No pending requests.</p>
       </div>
 
       <div class="drawer-section">
@@ -548,6 +640,18 @@
     if(!d || typeof d !== "object") return JSON.parse(JSON.stringify(defaultData));
     if(!d.items) d.items = [];
     if(!d.meta) d.meta = {};
+    // "history" is a permanent log of every dish ever posted, past and present.
+    // If it's missing (older data, or freshly loaded from a database that had
+    // never seen this feature), seed it from whatever is currently on the menu
+    // so nothing appears to have vanished.
+    if(!d.history){
+      d.history = d.items.map(function(item){
+        return Object.assign({}, item, {dateAdded: item.dateAdded || d.meta.lastUpdated || new Date().toISOString()});
+      });
+    }
+    // "requests" is a queue of "request again" taps waiting for the admin to
+    // review — approving one re-adds the dish to the live menu.
+    if(!d.requests) d.requests = [];
     return d;
   }
 
@@ -559,10 +663,18 @@
     return JSON.parse(JSON.stringify(defaultData));
   }
 
-  function save(){
-    data.meta.lastUpdated = new Date().toISOString();
+  // Persists to localStorage (and pushes to the database if connected) without
+  // touching meta.lastUpdated — used for things like requests/dismissals that
+  // shouldn't make the board's "Updated" tagline change when the menu itself
+  // hasn't.
+  function persist(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     queueRemotePush(true);
+  }
+
+  function save(){
+    data.meta.lastUpdated = new Date().toISOString();
+    persist();
   }
 
   function queueRemotePush(immediate){
@@ -625,6 +737,10 @@
       if(document.getElementById("adminDrawer").classList.contains("open")){
         maybeFillMetaFields();
         renderItemList();
+        renderRequestList();
+      }
+      if(document.getElementById("historyDrawer").classList.contains("open")){
+        renderHistoryList();
       }
     });
   }
@@ -671,6 +787,8 @@
         renderBoard();
         fillMetaFields();
         renderItemList();
+        renderRequestList();
+        if(document.getElementById("historyDrawer").classList.contains("open")) renderHistoryList();
       }).catch(function(err){
         if(settled) return;
         settled = true;
@@ -697,6 +815,10 @@
 
   function uid(){
     return "item-" + Date.now() + "-" + Math.floor(Math.random()*10000);
+  }
+
+  function reqUid(){
+    return "req-" + Date.now() + "-" + Math.floor(Math.random()*10000);
   }
 
   // minimalist line-art "chalk doodle" icons, drawn with currentColor so they pick up the board's gold tint
@@ -917,7 +1039,7 @@
     if(e.target.id === "modalBackdrop") closeNutrition();
   });
   document.addEventListener("keydown", function(e){
-    if(e.key === "Escape"){ closeNutrition(); closeDrawer(); }
+    if(e.key === "Escape"){ closeNutrition(); closeDrawer(); closeHistoryDrawer(); }
   });
 
   // ---------- Admin drawer ----------
@@ -926,6 +1048,7 @@
     document.getElementById("adminDrawer").classList.add("open");
     fillMetaFields();
     renderItemList();
+    renderRequestList();
     fillConnectionField();
   }
   function closeDrawer(){
@@ -935,6 +1058,153 @@
   document.getElementById("adminToggle").addEventListener("click", openDrawer);
   document.getElementById("adminTextLink").addEventListener("click", function(e){ e.preventDefault(); openDrawer(); });
   document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+
+  // ---------- History drawer (Previous Recipes) ----------
+
+  function openHistoryDrawer(){
+    document.getElementById("historyDrawer").classList.add("open");
+    renderHistoryList();
+  }
+  function closeHistoryDrawer(){
+    document.getElementById("historyDrawer").classList.remove("open");
+  }
+
+  document.getElementById("historyToggle").addEventListener("click", openHistoryDrawer);
+  document.getElementById("closeHistoryDrawer").addEventListener("click", closeHistoryDrawer);
+
+  function renderHistoryList(){
+    var listEl = document.getElementById("historyList");
+    listEl.innerHTML = "";
+    var entries = (data.history || []).slice().sort(function(a, b){
+      return new Date(b.dateAdded || 0) - new Date(a.dateAdded || 0);
+    });
+    document.getElementById("noHistoryHint").style.display = entries.length ? "none" : "block";
+
+    entries.forEach(function(entry){
+      var card = el("div", {class:"history-card"});
+
+      var nameEl = el("div", {class:"name"});
+      nameEl.textContent = entry.name;
+      card.appendChild(nameEl);
+
+      var metaEl = el("div", {class:"meta"});
+      metaEl.textContent = "Posted " + (formatDate(entry.dateAdded) || "date unknown");
+      card.appendChild(metaEl);
+
+      if(entry.description){
+        var descEl = el("div", {class:"desc"});
+        descEl.textContent = entry.description;
+        card.appendChild(descEl);
+      }
+
+      var rowActions = el("div", {class:"row-actions"});
+      var isOnMenu = data.items.some(function(i){ return i.id === entry.id; });
+
+      if(isOnMenu){
+        var tag = el("span", {class:"on-menu-tag"});
+        tag.textContent = "On the menu now";
+        rowActions.appendChild(tag);
+      } else {
+        var alreadyRequested = (data.requests || []).some(function(r){ return r.sourceId === entry.id; });
+        var reqBtn = el("button", {type:"button"});
+        reqBtn.textContent = alreadyRequested ? "Requested ✓" : "Request Again";
+        if(alreadyRequested) reqBtn.disabled = true;
+        reqBtn.addEventListener("click", function(){ requestAgain(entry, reqBtn); });
+        rowActions.appendChild(reqBtn);
+      }
+
+      card.appendChild(rowActions);
+      listEl.appendChild(card);
+    });
+  }
+
+  function requestAgain(entry, btn){
+    var req = {
+      id: reqUid(),
+      sourceId: entry.id,
+      name: entry.name,
+      icon: entry.icon || "",
+      description: entry.description || "",
+      nutrition: entry.nutrition || null,
+      requestedAt: new Date().toISOString()
+    };
+    data.requests.push(req);
+    persist();
+    if(btn){ btn.textContent = "Requested ✓"; btn.disabled = true; }
+    renderRequestList();
+  }
+
+  function renderRequestList(){
+    var listEl = document.getElementById("requestList");
+    if(!listEl) return;
+    listEl.innerHTML = "";
+    var reqs = (data.requests || []).slice().sort(function(a, b){
+      return new Date(a.requestedAt || 0) - new Date(b.requestedAt || 0);
+    });
+    document.getElementById("noRequestsHint").style.display = reqs.length ? "none" : "block";
+
+    reqs.forEach(function(req){
+      var card = el("div", {class:"request-card"});
+      var info = el("div", {class:"info"});
+      var nameEl = el("div", {class:"name"});
+      nameEl.textContent = req.name;
+      info.appendChild(nameEl);
+      var metaEl = el("div", {class:"meta"});
+      metaEl.textContent = "Requested " + (formatDate(req.requestedAt) || "recently");
+      info.appendChild(metaEl);
+      card.appendChild(info);
+
+      var actions = el("div", {class:"actions"});
+      var addBtn = el("button", {type:"button", class:"primary"});
+      addBtn.textContent = "Add to Menu";
+      addBtn.addEventListener("click", function(){ approveRequest(req.id); });
+      var dismissBtn = el("button", {type:"button"});
+      dismissBtn.textContent = "Dismiss";
+      dismissBtn.addEventListener("click", function(){ dismissRequest(req.id); });
+      actions.appendChild(addBtn);
+      actions.appendChild(dismissBtn);
+      card.appendChild(actions);
+
+      listEl.appendChild(card);
+    });
+  }
+
+  function addHistoryEntry(item){
+    data.history.push({
+      id: item.id,
+      name: item.name,
+      icon: item.icon || "",
+      description: item.description || "",
+      nutrition: item.nutrition || null,
+      dateAdded: new Date().toISOString()
+    });
+  }
+
+  function approveRequest(id){
+    var req = data.requests.find(function(r){ return r.id === id; });
+    if(!req) return;
+    var newItem = {
+      id: uid(),
+      name: req.name,
+      icon: req.icon || "",
+      description: req.description || "",
+      nutrition: req.nutrition || null
+    };
+    data.items.push(newItem);
+    addHistoryEntry(newItem);
+    data.requests = data.requests.filter(function(r){ return r.id !== id; });
+    save();
+    renderBoard();
+    renderItemList();
+    renderRequestList();
+    if(document.getElementById("historyDrawer").classList.contains("open")) renderHistoryList();
+  }
+
+  function dismissRequest(id){
+    data.requests = data.requests.filter(function(r){ return r.id !== id; });
+    persist();
+    renderRequestList();
+  }
 
   // Fallback: visiting the page with ?admin or #admin in the address bar always
   // opens the admin panel, regardless of whether any on-page button is visible.
@@ -1114,14 +1384,23 @@
     if(editingId){
       var idx = data.items.findIndex(function(i){ return i.id === editingId; });
       if(idx > -1) data.items[idx] = Object.assign({id: editingId}, itemData);
+      var histIdx = data.history.findIndex(function(h){ return h.id === editingId; });
+      var updatedItem = Object.assign({id: editingId}, itemData);
+      if(histIdx > -1){
+        data.history[histIdx] = Object.assign({}, data.history[histIdx], updatedItem);
+      } else {
+        addHistoryEntry(updatedItem);
+      }
     } else {
       itemData.id = uid();
       data.items.push(itemData);
+      addHistoryEntry(itemData);
     }
 
     save();
     renderBoard();
     renderItemList();
+    if(document.getElementById("historyDrawer").classList.contains("open")) renderHistoryList();
     resetForm();
   });
 
